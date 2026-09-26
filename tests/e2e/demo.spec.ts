@@ -45,6 +45,7 @@ test('mobile demo button and manual correction remain usable', async ({ page }) 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
+  await page.getByRole('button', { name: 'Загрузить выписку', exact: true }).click();
   await page.getByRole('button', { name: 'Попробовать демо', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Всё ли верно?' })).toBeVisible();
   await page.getByLabel('Сумма строки 1', { exact: true }).fill('6100');
@@ -56,4 +57,30 @@ test('mobile demo button and manual correction remain usable', async ({ page }) 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
+  await page.setViewportSize({ width: 320, height: 720 });
+  for (const section of ['Обзор', 'Карты и счета', 'Переводы', 'Сценарии']) {
+    await page.getByRole('button', { name: section, exact: true }).click();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+});
+
+test('main screens and upload dialog fit common phone, tablet and desktop widths', async ({ page }) => {
+  for (const width of [320, 390, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/');
+    if (width === 320 || width === 768)
+      await page.screenshot({ path: `test-results/overview-${width}.png`, fullPage: true });
+    for (const section of ['Обзор', 'Карты и счета', 'Переводы', 'Сценарии']) {
+      await page.getByRole('button', { name: section, exact: true }).click();
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+        .toBe(true);
+    }
+    await page.getByRole('button', { name: 'Обзор', exact: true }).click();
+    await page.getByRole('button', { name: 'Загрузить выписку', exact: true }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+      .toBe(true);
+  }
 });

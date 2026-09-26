@@ -19,7 +19,9 @@ export async function anonymizeBankTablePdf(buffer: Buffer) {
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber++) {
       const content = await (await document.getPage(pageNumber)).getTextContent();
       const cells: Cell[] = content.items
-        .filter((item): item is typeof item & { str: string } => 'str' in item)
+        .filter((item): item is typeof item & { str: string; transform: number[] } =>
+          'str' in item && 'transform' in item,
+        )
         .map((item) => ({
           x: Math.round(item.transform[4]),
           y: Math.round(item.transform[5]),

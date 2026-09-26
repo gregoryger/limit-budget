@@ -14,7 +14,9 @@ import {
   LogOut,
   Plus,
   ShieldCheck,
+  Search,
   Sparkles,
+  Target,
   Upload,
   Wallet,
 } from 'lucide-react';
@@ -26,13 +28,20 @@ import { BudgetInputs } from './BudgetInputs';
 import { CategoryChart, ProjectionChart } from './Charts';
 import { Scenarios } from './Scenarios';
 import { Accounts } from './Accounts';
-type Page = 'Обзор' | 'Карты и счета' | 'Переводы' | 'Сценарии';
+import { activeSubscriptions, createShowcaseData } from '../../shared/showcase';
+import { DemoOverview, ExpenseDetective, GoalPlanner, Subscriptions } from './Showcase';
+import { GigaAdvisor, type AdvisorAction, type AdvisorExtras } from './GigaAdvisor';
+type Page = 'Обзор' | 'Карты и счета' | 'Переводы' | 'Сценарии' | 'Детектив' | 'Цели' | 'Подписки';
 const nav = [
   { name: 'Обзор' as Page, icon: LayoutDashboard },
-  { name: 'Карты и счета' as Page, icon: CreditCard },
-  { name: 'Переводы' as Page, icon: ArrowUpRight },
   { name: 'Сценарии' as Page, icon: FlaskConical },
+  { name: 'Детектив' as Page, icon: Search },
+  { name: 'Цели' as Page, icon: Target },
+  { name: 'Подписки' as Page, icon: CreditCard },
+  { name: 'Карты и счета' as Page, icon: Wallet },
+  { name: 'Переводы' as Page, icon: ArrowUpRight },
 ];
+const showcase = createShowcaseData();
 function initialAssumptions(demo: boolean): Assumptions {
   const now = new Date();
   const asOf = demo
@@ -55,10 +64,13 @@ export function App() {
   const [page, setPage] = useState<Page>('Обзор');
   const [review, setReview] = useState<ImportResult | null>(null);
   const [imported, setImported] = useState<ImportResult | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>(showcase.transactions);
   const [audit, setAudit] = useState<unknown[]>([]);
-  const [assumptions, setAssumptions] = useState<Assumptions>(initialAssumptions(false));
-  const [explanation, setExplanation] = useState('');
+  const [assumptions, setAssumptions] = useState<Assumptions>(showcase.assumptions);
+  const [explanation, setExplanation] = useState(
+    'Это показательный бюджет. Расчёт использует вымышленные операции и ваши допущения: остаток, будущий доход, обязательные платежи и ежедневные траты.',
+  );
+  const [showcaseMode, setShowcaseMode] = useState(true);
   const [explanationMode, setExplanationMode] = useState('local');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -67,9 +79,16 @@ export function App() {
   const [file, setFile] = useState<File | null>(null);
   const [sanitizedCsv, setSanitizedCsv] = useState<string | null>(null);
   const [sanitizedSummary, setSanitizedSummary] = useState('');
+  const [advisorOpen, setAdvisorOpen] = useState(false);
+  const [advisorAction, setAdvisorAction] = useState<AdvisorAction | null>(null);
+  const advisorSequence = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const budget = calculateBudget(transactions, assumptions);
   const hasData = transactions.length > 0;
+  function openAdvisor(extras: AdvisorExtras = {}) {
+    setAdvisorOpen(true);
+    setAdvisorAction({ id: ++advisorSequence.current, screen: page, extras });
+  }
   async function startImport(demo: boolean) {
     if (!demo && (!file || !safe)) return;
     setBusy(true);
@@ -123,6 +142,14 @@ export function App() {
     URL.revokeObjectURL(url);
   }
   async function compute(value: Assumptions, id = imported?.id) {
+    if (showcaseMode && !id) {
+      const result = calculateBudget(transactions, value);
+      setAssumptions(result.assumptions);
+      setExplanation(
+        `При текущем плане после обязательных платежей и ежедневных трат останется ${result.projected === null ? 'неизвестная сумма' : rub(result.projected)}. Измените значения ниже и сравните сценарии.`,
+      );
+      return;
+    }
     if (!id) return;
     setBusy(true);
     setError('');
@@ -145,6 +172,7 @@ export function App() {
     setImported(review);
     setTransactions(t);
     setAudit(a);
+    setShowcaseMode(false);
     setAssumptions(next);
     setReview(null);
     setPage('Обзор');
@@ -154,10 +182,13 @@ export function App() {
     const ids = [review?.id, imported?.id].filter(Boolean);
     setReview(null);
     setImported(null);
-    setTransactions([]);
+    setTransactions(showcase.transactions);
     setAudit([]);
-    setExplanation('');
-    setAssumptions(initialAssumptions(false));
+    setExplanation(
+      'Это показательный бюджет на вымышленных данных. Измените допущения и сравните сценарии.',
+    );
+    setAssumptions(showcase.assumptions);
+    setShowcaseMode(true);
     setPage('Обзор');
     for (const id of ids) await api(`/api/import/${id}`, { method: 'DELETE' }).catch(() => {});
   }
@@ -199,6 +230,9 @@ export function App() {
                 key={name}
                 disabled={busy || !!review}
                 className={page === name ? 'nav-item active' : 'nav-item'}
+                aria-label={name}
+                aria-current={page === name ? 'page' : undefined}
+                title={name}
                 onClick={() => setPage(name)}
               >
                 <Icon size={19} />
@@ -222,12 +256,12 @@ export function App() {
             </div>
             <button className="reset-button" disabled={busy} onClick={clear}>
               <LogOut size={17} />
-              Очистить сессию
+              Вернуть демо
             </button>
             <p className="sidebar-foot">
-              Хакатон-прототип
+              Демонстрационный стенд
               <br />
-              Не банковский сервис
+              Вымышленные данные
             </p>
           </div>
         </aside>
@@ -240,16 +274,23 @@ export function App() {
             <div className="topbar-right">
               <span className="status-dot" />
               <span className="small">
-                {imported?.mode === 'gigachat'
-                  ? 'GigaChat подключён'
-                  : imported
-                    ? 'Демо-режим'
-                    : 'Твой финансовый помощник'}
+                {showcaseMode
+                  ? 'Демонстрация · вымышленные данные'
+                  : imported?.mode === 'gigachat'
+                    ? 'GigaChat подключён'
+                    : imported
+                      ? 'Демо-режим'
+                      : 'Твой финансовый помощник'}
               </span>
               <span className="header-divider" />
               <span className="avatar">СТ</span>
             </div>
           </header>
+          {showcaseMode && (
+            <div className="demo-ribbon">
+              <Sparkles size={13} /> ДЕМО · ВЫМЫШЛЕННЫЕ ДАННЫЕ
+            </div>
+          )}
           <main>
             {error && (
               <div className="error" role="alert">
@@ -288,7 +329,7 @@ export function App() {
                         <p className="muted">Понимай свой бюджет. Живи в своём ритме.</p>
                       </div>
                       <button
-                        className="primary"
+                        className={showcaseMode ? 'secondary' : 'primary'}
                         disabled={busy}
                         onClick={() => setUploadOpen(true)}
                       >
@@ -402,7 +443,19 @@ export function App() {
                       </>
                     ) : (
                       <>
-                        <div className="notice compact">{imported?.notice}</div>
+                        {showcaseMode && (
+                          <DemoOverview
+                            assumptions={assumptions}
+                            budget={budget}
+                            onNavigate={setPage}
+                            onAskAdvisor={() =>
+                              openAdvisor({ question: 'Что самое важное в моём бюджете сейчас?' })
+                            }
+                          />
+                        )}
+                        {imported?.notice && (
+                          <div className="notice compact">{imported.notice}</div>
+                        )}
                         <div className="stats-grid">
                           <Stat
                             title="Текущий остаток"
@@ -415,14 +468,14 @@ export function App() {
                             icon={<Wallet size={18} />}
                           />
                           <Stat
-                            title="Доходы по выписке"
+                            title={showcaseMode ? 'Доходы в демо-истории' : 'Доходы по выписке'}
                             value={rub(budget.income)}
                             sub="Стипендия, подработка и другое"
                             icon={<ArrowDownLeft size={18} />}
                             positive
                           />
                           <Stat
-                            title="Расходы по выписке"
+                            title={showcaseMode ? 'Расходы в демо-истории' : 'Расходы по выписке'}
                             value={rub(budget.expenses)}
                             sub={`${transactions.length} подтверждённых операций`}
                             icon={<ArrowUpRight size={18} />}
@@ -431,7 +484,9 @@ export function App() {
                         <div className="forecast-grid">
                           <section className="glass forecast-card">
                             <div className="section-heading">
-                              <h2>До конца месяца</h2>
+                              <h2>
+                                {showcaseMode ? `Через ${budget.days} дней` : 'До конца месяца'}
+                              </h2>
                               <span className="tag">ПРОГНОЗ</span>
                             </div>
                             <div className="forecast-answer">
@@ -470,13 +525,24 @@ export function App() {
                               Посмотреть «Что, если»
                               <ArrowRight size={17} />
                             </button>
+                            <button
+                              className="text-link"
+                              onClick={() =>
+                                openAdvisor({
+                                  question: 'На что мне обратить внимание в этом бюджете?',
+                                })
+                              }
+                            >
+                              Спросить GigaChat <Sparkles size={16} />
+                            </button>
                           </section>
                         </div>
                         <BudgetInputs
-                          key={imported?.id}
+                          key={imported?.id ?? 'showcase'}
                           value={assumptions}
                           onSave={compute}
                           busy={busy}
+                          demo={showcaseMode}
                         />
                         <div className="analysis-grid">
                           <CategoryChart budget={budget} />
@@ -488,7 +554,10 @@ export function App() {
                             <p className="muted small">
                               По признакам в выписке. Не добавляем в будущие платежи автоматически.
                             </p>
-                            {budget.recurring.map((t) => (
+                            {(showcaseMode
+                              ? activeSubscriptions(transactions, assumptions.asOf)
+                              : budget.recurring
+                            ).map((t) => (
                               <div className="recurring-row" key={t.sourceId}>
                                 <span className="recurring-icon">
                                   <CreditCard size={18} />
@@ -500,23 +569,36 @@ export function App() {
                                 <b>{rub(t.amountKopecks)}</b>
                               </div>
                             ))}
-                            {!budget.recurring.length && (
+                            {!(
+                              showcaseMode
+                                ? activeSubscriptions(transactions, assumptions.asOf)
+                                : budget.recurring
+                            ).length && (
                               <p className="muted">Вероятных регулярных платежей не отмечено.</p>
                             )}
                           </section>
                         </div>
-                        <Transactions transactions={transactions} onDownload={downloadAudit} />
-                        <details className="glass source-details">
-                          <summary>Исходные строки, решения и допущения</summary>
-                          <p className="small muted">
-                            История операций — {transactions[0]?.date} … {transactions.at(-1)?.date}
-                            . Прогноз — с дня после {assumptions.asOf} до {assumptions.endDate}.
-                            Исторический доход не прибавляется к текущему остатку. Прогноз не
-                            учитывает даты будущих поступлений и платежей; остаток внутри периода
-                            может быть ниже.
-                          </p>
-                          <pre>{JSON.stringify({ assumptions, audit }, null, 2)}</pre>
-                        </details>
+                        {showcaseMode ? (
+                          <details className="glass source-details demo-transactions">
+                            <summary>Посмотреть все вымышленные операции</summary>
+                            <Transactions transactions={transactions} onDownload={downloadAudit} />
+                          </details>
+                        ) : (
+                          <Transactions transactions={transactions} onDownload={downloadAudit} />
+                        )}
+                        {!showcaseMode && (
+                          <details className="glass source-details">
+                            <summary>Исходные строки, решения и допущения</summary>
+                            <p className="small muted">
+                              История операций — {transactions[0]?.date} …{' '}
+                              {transactions.at(-1)?.date}. Прогноз — с дня после {assumptions.asOf}{' '}
+                              до {assumptions.endDate}. Исторический доход не прибавляется к
+                              текущему остатку. Прогноз не учитывает даты будущих поступлений и
+                              платежей; остаток внутри периода может быть ниже.
+                            </p>
+                            <pre>{JSON.stringify({ assumptions, audit }, null, 2)}</pre>
+                          </details>
+                        )}
                       </>
                     )}
                   </>
@@ -536,7 +618,9 @@ export function App() {
                       key={page + imported?.id}
                       transactions={transactions}
                       assumptions={assumptions}
+                      importId={imported?.id}
                       transferMode={page === 'Переводы'}
+                      onAskAdvisor={openAdvisor}
                     />
                   ) : (
                     <section className="glass empty-state">
@@ -552,6 +636,31 @@ export function App() {
                       </button>
                     </section>
                   ))}
+                {page === 'Детектив' && (
+                  <ExpenseDetective
+                    transactions={transactions}
+                    asOf={assumptions.asOf}
+                    demo={showcaseMode}
+                    onScenario={() => setPage('Сценарии')}
+                    onAskAdvisor={openAdvisor}
+                  />
+                )}
+                {page === 'Цели' && (
+                  <GoalPlanner
+                    key={imported?.id ?? 'showcase'}
+                    assumptions={assumptions}
+                    onAskAdvisor={openAdvisor}
+                  />
+                )}
+                {page === 'Подписки' && (
+                  <Subscriptions
+                    key={imported?.id ?? 'showcase'}
+                    transactions={transactions}
+                    asOf={assumptions.asOf}
+                    demo={showcaseMode}
+                    onAskAdvisor={openAdvisor}
+                  />
+                )}
               </>
             )}
             <footer className="page-footer">
@@ -564,6 +673,14 @@ export function App() {
         </div>
       </div>
       <div className="outside-caption">Деньги — часть жизни. Не вся жизнь.</div>
+      <GigaAdvisor
+        screen={page}
+        assumptions={assumptions}
+        importId={imported?.id}
+        open={advisorOpen}
+        onOpenChange={setAdvisorOpen}
+        action={advisorAction}
+      />
       {uploadOpen && (
         <div
           className="modal-backdrop"
@@ -588,8 +705,8 @@ export function App() {
             <span className="eyebrow">ШАГ 01 / ВЫПИСКА</span>
             <h2 id="upload-title">Начнём с твоих операций</h2>
             <p className="muted">
-              CSV в UTF-8 — до 2 МБ. Для текстового PDF нет ограничения по размеру,
-              страницам и числу строк. Сканированные PDF пока не поддерживаются.
+              CSV в UTF-8 — до 2 МБ. Для текстового PDF нет ограничения по размеру, страницам и
+              числу строк. Сканированные PDF пока не поддерживаются.
             </p>
             <button className="dropzone" disabled={busy} onClick={() => fileInput.current?.click()}>
               <Upload size={30} />
@@ -618,8 +735,8 @@ export function App() {
             {file?.name.toLowerCase().endsWith('.pdf') && (
               <div className="anonymize-option">
                 <p className="small muted">
-                  Если PDF содержит полные реквизиты, сначала обезличьте его локально. Для таблиц
-                  с датой и суммой сервис создаст CSV без имён, номеров и исходных описаний.
+                  Если PDF содержит полные реквизиты, сначала обезличьте его локально. Для таблиц с
+                  датой и суммой сервис создаст CSV без имён, номеров и исходных описаний.
                 </p>
                 <button className="secondary" disabled={busy} onClick={anonymizePdf}>
                   Обезличить PDF и подготовить CSV

@@ -5,10 +5,12 @@ export function BudgetInputs({
   value,
   onSave,
   busy,
+  demo = false,
 }: {
   value: Assumptions;
   onSave: (a: Assumptions) => void;
   busy: boolean;
+  demo?: boolean;
 }) {
   const [draft, setDraft] = useState(value);
   const [error, setError] = useState('');
@@ -41,7 +43,7 @@ export function BudgetInputs({
             Остаток — на конец выбранного дня. Уже прошедшие операции повторно не вычитаются.
           </p>
         </div>
-        <span className="tag">ВАШИ ДАННЫЕ</span>
+        <span className="tag">{demo ? 'ПАРАМЕТРЫ ДЕМО' : 'ВАШИ ДАННЫЕ'}</span>
       </div>
       <div className="fields three">
         <label>

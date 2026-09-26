@@ -9,6 +9,12 @@ import { anonymizeBankTablePdf } from './statement-import/anonymize-bank-table.j
 import { validateModelResponse } from './transactions/validate.js';
 import { demoResponse } from './gigachat/demo-response.js';
 import { explainBudget, extractWithGigaChat, isConfigured } from './gigachat/adapter.js';
+import { answerAdvisor } from './gigachat/advisor.js';
+import { explainScenarioWithGigaChat, interpretScenarioWithGigaChat } from './gigachat/adapter.js';
+import { advisorRequestSchema } from '../shared/advisor.js';
+import { calculateScenarioImpact, scenarioQuestionSchema } from '../shared/scenario-ai.js';
+import { rub } from '../shared/transactions.js';
+import { createShowcaseData } from '../shared/showcase.js';
 import { assumptionsSchema, calculateBudget } from '../shared/budget-calculation.js';
 import { transactionSchema, type ImportResult, type Transaction } from '../shared/transactions.js';
 const upload = multer({
@@ -53,6 +59,70 @@ app.use('/api', (req, _res, next) => {
 app.use('/api/import/:id/confirm', express.json({ limit: Infinity }));
 app.use(express.json({ limit: '300kb' }));
 app.get('/api/health', (_req, res) => res.json({ ok: true, gigachatConfigured: isConfigured() }));
+app.post('/api/scenario-ai', async (req, res) => {
+  const payload = scenarioQuestionSchema.parse(req.body);
+  if (!isConfigured())
+    throw new InputError('Для разбора вопроса настройте GigaChat в серверном .env.', 503);
+  const transactions = payload.importId
+    ? getSession(payload.importId).transactions
+    : createShowcaseData(new Date(`${payload.assumptions.asOf}T12:00:00`)).transactions;
+  if (!transactions) throw new InputError('Сначала подтвердите импорт.', 400);
+  try {
+    const intent = await interpretScenarioWithGigaChat(payload.question);
+    const impact = calculateScenarioImpact(transactions, payload.assumptions, intent);
+    if (!impact) return res.json({ mode: 'gigachat', intent, impact: null, explanation: null });
+    const explanation = await explainScenarioWithGigaChat({
+      question: payload.question,
+      interpretation: {
+        event: intent.event,
+        label: intent.label,
+        frequency: intent.frequency,
+        uncertain: intent.uncertain,
+        amount: rub(intent.amountKopecks!),
+      },
+      calculations: {
+        periodDays: impact.days,
+        occurrences: impact.occurrences,
+        amountForPeriod: rub(impact.periodAmountKopecks),
+        annualAmount: impact.yearlyAmountKopecks === null ? null : rub(impact.yearlyAmountKopecks),
+        changeFromPlan: rub(impact.signedChangeKopecks),
+        baseProjected:
+          impact.baseProjectedKopecks === null ? null : rub(impact.baseProjectedKopecks),
+        conditionalProjected:
+          impact.scenarioProjectedKopecks === null ? null : rub(impact.scenarioProjectedKopecks),
+        freeNow: impact.freeNowKopecks === null ? null : rub(impact.freeNowKopecks),
+      },
+      source: payload.importId ? 'подтверждённая выписка' : 'вымышленные демонстрационные данные',
+    });
+    res.json({ mode: 'gigachat', intent, impact, explanation });
+  } catch {
+    throw new InputError('GigaChat не смог разобрать вопрос. Повторите попытку.', 502);
+  }
+});
+app.post('/api/advisor', async (req, res) => {
+  const payload = advisorRequestSchema.parse(req.body);
+  if (!isConfigured())
+    throw new InputError(
+      'GigaChat ещё не подключён. Добавьте GIGACHAT_AUTH_KEY в серверный .env.',
+      503,
+    );
+  const transactions = payload.importId
+    ? getSession(payload.importId).transactions
+    : createShowcaseData(new Date(`${payload.assumptions.asOf}T12:00:00`)).transactions;
+  if (!transactions) throw new InputError('Сначала подтвердите импорт.', 400);
+  if (
+    payload.scenario &&
+    payload.assumptions.futurePaymentsKopecks !== null &&
+    payload.scenario.amountKopecks + payload.assumptions.futurePaymentsKopecks > 100_000_000_00
+  )
+    throw new InputError('Сумма сценария слишком велика.', 400);
+  try {
+    const answer = await answerAdvisor(payload, transactions, !payload.importId);
+    res.json({ ...answer, mode: 'gigachat' });
+  } catch {
+    throw new InputError('GigaChat сейчас не ответил. Расчёты на экране остаются доступными.', 502);
+  }
+});
 app.post('/api/anonymize', upload.single('file'), async (req, res) => {
   if (!req.file) throw new InputError('Выберите PDF.');
   if (!req.file.originalname.toLowerCase().endsWith('.pdf'))
