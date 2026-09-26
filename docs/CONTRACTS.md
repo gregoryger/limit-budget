@@ -1,0 +1,130 @@
+# Договор между модулями
+
+Все денежные поля API и внутренних типов — **целые копейки**, абсолютные величины; направление — отдельное поле. ISO-даты `YYYY-MM-DD`, без локальных времён. UI переводит рубли в копейки строковым разбором (без умножения дробного float).
+
+## Поток
+
+```text
+CSV/PDF (Buffer)
+  → statement-import.extractStatement()
+  → SourceRow[] (все строки, включая неизвестные)
+  → gigachat.extractWithGigaChat() или фиксированный demoResponse
+  → modelResponseSchema + transactions.validateModelResponse()
+  → ReviewRow[]
+  → пользовательские решения include/exclude + исправления и причина
+  → подтверждённые Transaction[] + audit на сервере
+  → budget-calculation.calculateBudget(transactions, assumptions)
+  → Budget → gigachat.explainBudget(Budget)
+  → UI и scenarios.simulate() на той же функции расчёта
+```
+
+Для PDF нет прикладного ограничения по размеру и количеству строк. Адаптер делит строки на запросы до 60 строк и 12 000 символов, проверяет каждый структурированный ответ относительно его части выписки и объединяет результаты. Исходная строка, которая не помещается даже в один запрос, остаётся в `skipped` для ручного решения. Экран проверки отображает 50 строк за раз, сохраняя решения по всем строкам. Подтверждение принимает решение для каждой исходной строки независимо от размера PDF.
+
+## Общие типы
+
+Источник схем — `shared/transactions.ts`. JSON Schema генерируется через `zodToJsonSchema(modelResponseSchema)` непосредственно для запроса провайдеру; сервер валидирует той же Zod-схемой.
+
+```ts
+type SourceRow = {
+  id: string;
+  raw: string;
+  date: string | null;
+  description: string | null;
+  amountKopecks: number | null;
+  direction: 'income' | 'expense' | null;
+  issue?: string;
+};
+
+type Transaction = {
+  sourceId: string;
+  date: string;
+  description: string;
+  amountKopecks: number;
+  direction: 'income' | 'expense';
+  category:
+    | 'Подработка'
+    | 'Стипендия'
+    | 'Продукты'
+    | 'Кафе'
+    | 'Транспорт'
+    | 'Жильё'
+    | 'Подписки'
+    | 'Переводы'
+    | 'Другое';
+  recurring: boolean;
+  suspicious: boolean;
+  note: string;
+};
+
+type ModelResponse = {
+  transactions: Transaction[];
+  skipped: { sourceId: string; reason: string }[];
+};
+
+type ReviewRow = {
+  source: SourceRow;
+  transaction: Transaction | null;
+  issues: string[];
+};
+```
+
+Модель не может добавить источник. Повторный/неизвестный `sourceId` блокирует ответ целиком. Несовпадение суммы, даты, направления или описания оставляет `transaction=null`, исходник и причины видны. Отсутствующие в ответе строки также сохраняются. Свободный текст, Markdown-fence и неполный JSON не превращаются в транзакции.
+
+## REST API
+
+Все ошибки: `{ "error": "понятное сообщение" }`, HTTP 4xx/5xx. Никаких сырых ошибок провайдера или ключей. Ответы API `Cache-Control: no-store`.
+
+| Метод и путь                   | Вход                                                                        | Выход                                                          |
+| ------------------------------ | --------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `GET /api/health`              | —                                                                           | `{ok, gigachatConfigured}` без ключа                           |
+| `POST /api/import`             | multipart: `file`, `safeData="true"`; либо `demo="true"`, `safeData="true"` | `ImportResult` с UUID, filename, mode, notice, rows, expiresAt |
+| `POST /api/import/:id/confirm` | `{decisions: Decision[]}`                                                   | `{transactions, audit}`                                        |
+| `POST /api/budget`             | `{importId, assumptions}`                                                   | `{budget, explanation, explanationMode}`                       |
+| `DELETE /api/import/:id`       | —                                                                           | `204`; удаляет память импорта                                  |
+
+```ts
+type Decision = {
+  sourceId: string;
+  include: boolean;
+  transaction: Transaction | null;
+  reviewed: boolean;
+  reason: string;
+};
+```
+
+На каждую исходную строку нужно ровно одно решение. При исключении обязательна причина. При любом исправлении или спорной строке обязательны `reviewed=true` и непустая причина. Описание сохраняется из источника; для неизвестных PDF-строк сохраняется исходный текст. Пустой подтверждённый импорт отклоняется. Журнал содержит оригинал, действие (`accepted`, `corrected`, `excluded`), итоговую операцию и причину. Ручное исправление суммы может отличаться от распознанной: это осознанное пользовательское действие, отличимое в аудите от вывода модели.
+
+UUID используется как временный дескриптор в локальной демонстрации, а не как полноценная авторизация. До 100 активных импортов, срок 30 минут, фоновые удаления раз в минуту. Для многопользовательского сервиса слой сессий нужно заменить авторизованным хранилищем.
+
+## Расчёт
+
+Схема `Assumptions` находится в `shared/budget-calculation.ts`:
+
+```ts
+type Assumptions = {
+  asOf: string; // остаток на конец дня
+  endDate: string; // последний день прогноза включительно
+  currentBalanceKopecks: number | null;
+  futurePaymentsKopecks: number | null;
+  futureIncomeKopecks: number;
+  dailySpendKopecks: number;
+};
+```
+
+```text
+income   = сумма подтверждённых income
+expenses = сумма подтверждённых expense
+net      = income − expenses                  // история, не текущий остаток!
+days     = UTC-дней между asOf и endDate
+available = currentBalance + futureIncome − futurePayments
+projected = available − days × dailySpend
+dailyLimit = floor(available / days)          // округление вниз в копейках
+```
+
+Если остаток или обязательства `null`, `complete=false`, `available/projected/dailyLimit=null`. Нулевые значения считаются явно указанными. При `days=0` `dailyLimit=null`, ежедневные расходы не вычитаются. `byCategory` строится только по расходам. `recurring` содержит только отмеченные расходные операции; это список гипотез, а не автоматически начисленные будущие обязательства.
+
+`scenarios.simulate(transactions, base, dailySpendKopecks, transferKopecks)` возвращает новый `Budget`, прибавляя разовый расход к обязательствам и меняя ежедневные траты. Входы и история не мутируются; сетевой перевод не выполняется. При неизвестных обязательствах прогноз остаётся неизвестным.
+
+## Объяснение
+
+`explainBudget(Budget)` получает только рассчитанный результат и допущения. В ответе API `explanationMode='gigachat'` означает отдельный настоящий запрос модели; `local` — пояснение приложения. Ошибка объяснения не отменяет уже рассчитанный бюджет. Текст модели никогда не разбирается как число и не меняет расчёт.
