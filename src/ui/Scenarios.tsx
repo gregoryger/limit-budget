@@ -78,7 +78,7 @@ export function Scenarios({
     <>
       <div className="section-heading">
         <div>
-          <p className="eyebrow">ПЛАНИРУЙТЕ СПОКОЙНО</p>
+          <p className="eyebrow">Планируйте спокойно</p>
           <h1>{transferMode ? 'Переводы без сюрпризов' : 'Что будет, если…'}</h1>
           <p className="muted">
             {transferMode
@@ -96,7 +96,7 @@ export function Scenarios({
       </div>
       {!transferMode && (
         <section className="glass question-panel">
-          <span className="eyebrow">СПРОСИ ПРО СВОЁ РЕШЕНИЕ</span>
+          <span className="eyebrow">Спроси про своё решение</span>
           <h2>Что будет, если…</h2>
           <form
             className="question-form"
@@ -203,7 +203,7 @@ export function Scenarios({
       )}
       <div className="scenario-grid">
         <section className="glass">
-          <span className="tag">ЧТО, ЕСЛИ</span>
+          <span className="tag">Что, если</span>
           <h2>
             {transferMode
               ? 'Перевести другу'
@@ -316,7 +316,7 @@ export function Scenarios({
           )}
         </section>
         <section className="glass">
-          <p className="eyebrow">ОСТАНЕТСЯ К КОНЦУ ПЕРИОДА</p>
+          <p className="eyebrow">Останется к концу периода</p>
           <div
             className={`large-number ${shownResult.projected !== null && shownResult.projected < 0 ? 'negative' : ''}`}
           >

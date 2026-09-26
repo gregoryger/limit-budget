@@ -35,7 +35,7 @@ test('jury can explore all showcase features immediately', async ({ page }) => {
     });
   });
   await page.goto('/');
-  await expect(page.getByText('ИНТЕРАКТИВНОЕ ДЕМО · ВЫМЫШЛЕННЫЕ ДАННЫЕ')).toBeVisible();
+  await expect(page.getByText('Интерактивное демо · вымышленные данные')).toBeVisible();
   await expect(page.locator('.showcase-free')).toContainText('24 303');
   await page.getByRole('button', { name: 'Сценарии', exact: true }).click();
   await page.getByRole('button', { name: 'Куплю телефон за 50 000 ₽' }).click();

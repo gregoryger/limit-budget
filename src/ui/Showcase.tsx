@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import {
   ArrowRight,
   CalendarDays,
@@ -19,6 +19,9 @@ import {
 } from '../../shared/showcase';
 import { rub, type Transaction } from '../../shared/transactions';
 import type { AdvisorExtras } from './GigaAdvisor';
+const BudgetStory = lazy(() =>
+  import('./motion/BudgetStory').then((module) => ({ default: module.BudgetStory })),
+);
 
 type Destination = 'Сценарии' | 'Детектив' | 'Цели' | 'Подписки';
 const features: { title: string; description: string; page: Destination; icon: typeof Sparkles }[] =
@@ -62,42 +65,54 @@ export function DemoOverview({
 }) {
   const balance = assumptions.currentBalanceKopecks ?? 0;
   const obligations = assumptions.futurePaymentsKopecks ?? 0;
-  const free = balance - obligations;
   const adjustment =
     obligations - demoObligations.reduce((sum, item) => sum + item.amountKopecks, 0);
   return (
     <>
       <section className="showcase-hero glass">
         <div>
-          <span className="showcase-badge">
-            <Sparkles size={15} /> ИНТЕРАКТИВНОЕ ДЕМО · ВЫМЫШЛЕННЫЕ ДАННЫЕ
-          </span>
-          <h2>Финансовый помощник, который показывает последствия решений</h2>
+          <h2>
+            Хватит ли денег
+            <br />
+            на твои планы?
+          </h2>
           <p>
-            Сценарий уже загружен: доходы, повседневные траты и подписки вымышлены. Открой любой
-            раздел и меняй суммы — результаты пересчитаются сразу.
+            Сначала обязательное. Потом — то, чего хочется. Проверь покупку и посмотри, что
+            останется до конца периода.
           </p>
-          <button className="primary" onClick={() => onNavigate('Сценарии')}>
+          {budget.projected !== null && (
+            <a className="showcase-projection" href="#forecast">
+              <span>По плану через {budget.days} дней</span>
+              <strong className={budget.projected < 0 ? 'negative' : ''}>
+                {rub(budget.projected)} <ArrowRight size={18} />
+              </strong>
+            </a>
+          )}
+          <button className="secondary" onClick={() => onNavigate('Сценарии')}>
             Проверить покупку <ArrowRight size={17} />
           </button>
           <button className="text-link showcase-ask" onClick={onAskAdvisor}>
             Спросить GigaChat <Sparkles size={16} />
           </button>
+          <span className="showcase-badge">
+            <Sparkles size={14} /> Интерактивное демо · вымышленные данные
+          </span>
         </div>
         <div className="showcase-free">
-          <span>РЕАЛЬНО СВОБОДНО СЕЙЧАС</span>
-          <strong>{rub(free)}</strong>
-          <p>
-            {rub(balance)} на счетах − {rub(obligations)} обязательных платежей
-          </p>
-          <div className="free-meter">
-            <span
-              style={{
-                width: `${Math.max(0, Math.min(100, balance ? (free / balance) * 100 : 0))}%`,
-              }}
-            />
-          </div>
-          <small>Будущие доходы сюда не включены. Прогноз на {budget.days} дней — ниже.</small>
+          <Suspense
+            fallback={
+              <div className="story-fallback">
+                <span>Свободно после обязательных платежей</span>
+                <strong>{rub(balance - obligations)}</strong>
+                <p>
+                  {rub(balance)} − {rub(obligations)}
+                </p>
+              </div>
+            }
+          >
+            <BudgetStory balance={balance} obligations={obligations} />
+          </Suspense>
+          <small>Без будущих доходов. Прогноз на {budget.days} дней — ниже.</small>
         </div>
       </section>
       <div className="feature-grid">
@@ -115,10 +130,9 @@ export function DemoOverview({
       <section className="glass obligation-panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">ПОЧЕМУ НЕ ВСЯ СУММА СВОБОДНА</p>
             <h2>Обязательные платежи</h2>
           </div>
-          <span className="tag">В ПЛАНЕ</span>
+          <span className="tag">В плане</span>
         </div>
         <div className="obligation-grid">
           {demoObligations.map((item) => (
@@ -139,12 +153,6 @@ export function DemoOverview({
           вычитаются.
         </p>
       </section>
-      {budget.projected !== null && (
-        <p className="showcase-hint">
-          По плану через {budget.days} дней останется <strong>{rub(budget.projected)}</strong>.
-          Сценарии покажут, как это изменится после покупки.
-        </p>
-      )}
     </>
   );
 }
@@ -170,7 +178,7 @@ export function ExpenseDetective({
     <div className="feature-page">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">AI-ДЕТЕКТИВ РАСХОДОВ</p>
+          <p className="eyebrow">AI-детектив расходов</p>
           <h1>Куда уходят деньги?</h1>
           <p className="muted">
             Подсказки по {demo ? 'вымышленным' : 'подтверждённым'} операциям за последние 30 дней.
@@ -184,7 +192,7 @@ export function ExpenseDetective({
           <span className="feature-icon">
             <Coffee size={21} />
           </span>
-          <span className="tag">НЕЗАМЕТНЫЕ ПОКУПКИ</span>
+          <span className="tag">Незаметные покупки</span>
           <strong>{rub(insight.smallTotal)}</strong>
           <p>
             {insight.small.length} покупок до 500 ₽. По одной они кажутся небольшими, вместе заметно
@@ -195,7 +203,7 @@ export function ExpenseDetective({
           <span className="feature-icon">
             <Wallet size={21} />
           </span>
-          <span className="tag">УДОБСТВО</span>
+          <span className="tag">Удобство</span>
           <strong>{rub(insight.convenienceTotal)}</strong>
           <p>Доставка и такси за 30 дней: {insight.convenience.length} операций.</p>
         </section>
@@ -203,7 +211,7 @@ export function ExpenseDetective({
           <span className="feature-icon">
             <CalendarDays size={21} />
           </span>
-          <span className="tag">ДИНАМИКА КАФЕ</span>
+          <span className="tag">Динамика кафе</span>
           <strong>{growth === null ? 'Нет базы' : `${growth > 0 ? '+' : ''}${growth}%`}</strong>
           <p>
             {rub(insight.previousCafe)} в предыдущие 30 дней → {rub(insight.currentCafe)} сейчас.
@@ -213,10 +221,10 @@ export function ExpenseDetective({
       <section className="glass evidence-panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">ПРОВЕРЯЕМЫЕ НАБЛЮДЕНИЯ</p>
+            <p className="eyebrow">Проверяемые наблюдения</p>
             <h2>Операции за выводами</h2>
           </div>
-          <span className="tag">ДЕМО</span>
+          <span className="tag">Демо</span>
         </div>
         <div className="evidence-list">
           {insight.convenience.map((item) => (
@@ -289,7 +297,7 @@ export function GoalPlanner({
     <div className="feature-page">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">ФИНАНСОВЫЙ GPS</p>
+          <p className="eyebrow">Финансовый GPS</p>
           <h1>Путь к цели</h1>
           <p className="muted">
             Задай сумму и темп накопления. Мы покажем срок и альтернативные маршруты.
@@ -299,7 +307,7 @@ export function GoalPlanner({
       </div>
       <div className="goal-layout">
         <section className="glass goal-form">
-          <span className="tag">НАСТРОЙ МАРШРУТ</span>
+          <span className="tag">Настрой маршрут</span>
           <h2>Например, ноутбук</h2>
           <label>
             Стоимость цели, ₽
@@ -334,7 +342,7 @@ export function GoalPlanner({
           </p>
         </section>
         <section className="glass goal-result">
-          <span className="eyebrow">ПРОГНОЗ ДОСТИЖЕНИЯ</span>
+          <span className="eyebrow">Прогноз достижения</span>
           <strong>
             {months === null
               ? 'Задай сумму накопления'
@@ -409,7 +417,7 @@ export function Subscriptions({
     <div className="feature-page">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">АНТИПОДПИСКА</p>
+          <p className="eyebrow">Антиподписка</p>
           <h1>Регулярные платежи под контролем</h1>
           <p className="muted">
             Найденные {demo ? 'в демонстрационной истории' : 'в истории операций'} подписки. Отметь
@@ -435,7 +443,7 @@ export function Subscriptions({
       <section className="glass subscription-list">
         <div className="section-heading">
           <h2>Что повторяется</h2>
-          <span className="tag">СИМУЛЯЦИЯ ОТКЛЮЧЕНИЯ</span>
+          <span className="tag">Симуляция отключения</span>
         </div>
         {items.map((item) => (
           <label className="subscription-row" key={item.sourceId}>

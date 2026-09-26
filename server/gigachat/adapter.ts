@@ -6,12 +6,14 @@ import { advisorResponseSchema } from '../../shared/advisor.js';
 import { scenarioExplanationSchema, scenarioIntentSchema } from '../../shared/scenario-ai.js';
 import type { Budget } from '../../shared/budget-calculation.js';
 import { validateModelResponse } from '../transactions/validate.js';
+import { gigachatTransport } from './tls.js';
 let token: { value: string; expires: number } | undefined;
 export const isConfigured = () => Boolean(process.env.GIGACHAT_AUTH_KEY?.trim());
 async function accessToken() {
   if (token && token.expires > Date.now() + 60000) return token.value;
   if (!isConfigured()) throw new Error('GigaChat key missing');
   const response = await fetch('https://ngw.devices.sberbank.ru:9443/api/v2/oauth', {
+    ...gigachatTransport(),
     method: 'POST',
     signal: AbortSignal.timeout(15000),
     headers: {
@@ -40,6 +42,7 @@ async function chat(
   const base = process.env.GIGACHAT_BASE_URL || 'https://api.giga.chat/v1';
   if (!base.startsWith('https://')) throw new Error('HTTPS required');
   const response = await fetch(`${base.replace(/\/$/, '')}/chat/completions`, {
+    ...gigachatTransport(),
     method: 'POST',
     signal: AbortSignal.timeout(60000),
     headers: { Authorization: `Bearer ${await accessToken()}`, 'Content-Type': 'application/json' },

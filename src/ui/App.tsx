@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -31,6 +31,7 @@ import { Accounts } from './Accounts';
 import { activeSubscriptions, createShowcaseData } from '../../shared/showcase';
 import { DemoOverview, ExpenseDetective, GoalPlanner, Subscriptions } from './Showcase';
 import { GigaAdvisor, type AdvisorAction, type AdvisorExtras } from './GigaAdvisor';
+import { useModalFocus } from './useModalFocus';
 type Page = 'Обзор' | 'Карты и счета' | 'Переводы' | 'Сценарии' | 'Детектив' | 'Цели' | 'Подписки';
 const nav = [
   { name: 'Обзор' as Page, icon: LayoutDashboard },
@@ -62,6 +63,17 @@ function initialAssumptions(demo: boolean): Assumptions {
 }
 export function App() {
   const [page, setPage] = useState<Page>('Обзор');
+  const mainRef = useRef<HTMLElement>(null);
+  const previousPage = useRef(page);
+  useEffect(() => {
+    if (previousPage.current === page) return;
+    previousPage.current = page;
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    mainRef.current?.focus({ preventScroll: true });
+    document
+      .querySelector('[aria-current="page"]')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [page]);
   const [review, setReview] = useState<ImportResult | null>(null);
   const [imported, setImported] = useState<ImportResult | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>(showcase.transactions);
@@ -83,6 +95,10 @@ export function App() {
   const [advisorAction, setAdvisorAction] = useState<AdvisorAction | null>(null);
   const advisorSequence = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
+  const uploadDialog = useRef<HTMLElement>(null);
+  useModalFocus(uploadDialog, uploadOpen, () => {
+    if (!busy) setUploadOpen(false);
+  });
   const budget = calculateBudget(transactions, assumptions);
   const hasData = transactions.length > 0;
   function openAdvisor(extras: AdvisorExtras = {}) {
@@ -208,7 +224,14 @@ export function App() {
     <div className="desktop">
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
-      <div className="app-shell">
+      <div
+        className="app-shell"
+        inert={uploadOpen || undefined}
+        aria-hidden={uploadOpen || undefined}
+      >
+        <a className="skip-link" href="#main-content">
+          К содержимому
+        </a>
         <aside className="sidebar">
           <a
             className="brand"
@@ -223,8 +246,8 @@ export function App() {
               лимит<span className="brand-dot">.</span>
             </span>
           </a>
-          <p className="sidebar-label">ЛИЧНЫЙ БЮДЖЕТ</p>
-          <nav>
+          <p className="sidebar-label">Личный бюджет</p>
+          <nav aria-label="Разделы бюджета">
             {nav.map(({ name, icon: Icon }) => (
               <button
                 key={name}
@@ -252,7 +275,7 @@ export function App() {
                 <br />
                 Найдём баланс.
               </p>
-              <span className="tag">СТУДЕНЧЕСКИЙ РЕЖИМ</span>
+              <span className="tag">Студенческий режим</span>
             </div>
             <button className="reset-button" disabled={busy} onClick={clear}>
               <LogOut size={17} />
@@ -288,10 +311,10 @@ export function App() {
           </header>
           {showcaseMode && (
             <div className="demo-ribbon">
-              <Sparkles size={13} /> ДЕМО · ВЫМЫШЛЕННЫЕ ДАННЫЕ
+              <Sparkles size={13} /> Демо · вымышленные данные
             </div>
           )}
-          <main>
+          <main id="main-content" ref={mainRef} tabIndex={-1}>
             {error && (
               <div className="error" role="alert">
                 {error}
@@ -322,27 +345,37 @@ export function App() {
                   <>
                     <div className="section-heading main-heading">
                       <div>
-                        <p className="eyebrow">МЕНЬШЕ ТРЕВОГИ. БОЛЬШЕ ПЛАНОВ.</p>
                         <h1>
                           Деньги под контролем<span className="yellow">.</span>
                         </h1>
                         <p className="muted">Понимай свой бюджет. Живи в своём ритме.</p>
                       </div>
-                      <button
-                        className={showcaseMode ? 'secondary' : 'primary'}
-                        disabled={busy}
-                        onClick={() => setUploadOpen(true)}
-                      >
-                        <Upload size={17} />
-                        Загрузить выписку
-                      </button>
+                      <div className="overview-actions">
+                        <button
+                          className="primary"
+                          disabled={busy}
+                          onClick={() => setUploadOpen(true)}
+                        >
+                          <Upload size={17} />
+                          Загрузить выписку
+                        </button>
+                        {showcaseMode && (
+                          <button
+                            className="text-link demo-import-link"
+                            disabled={busy}
+                            onClick={() => startImport(true)}
+                          >
+                            Попробовать демо <ArrowRight size={15} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     {!hasData ? (
                       <>
                         <section className="welcome-hero glass">
                           <div className="hero-copy">
                             <span className="pill">
-                              <Sparkles size={14} /> AI-ПОМОЩНИК ПО БЮДЖЕТУ
+                              <Sparkles size={14} /> AI-помощник по бюджету
                             </span>
                             <h2>
                               Хватит ли денег
@@ -482,12 +515,12 @@ export function App() {
                           />
                         </div>
                         <div className="forecast-grid">
-                          <section className="glass forecast-card">
+                          <section className="glass forecast-card" id="forecast">
                             <div className="section-heading">
                               <h2>
                                 {showcaseMode ? `Через ${budget.days} дней` : 'До конца месяца'}
                               </h2>
-                              <span className="tag">ПРОГНОЗ</span>
+                              <span className="tag">Прогноз</span>
                             </div>
                             <div className="forecast-answer">
                               {budget.projected === null
@@ -510,8 +543,8 @@ export function App() {
                             </span>
                             <span className="tag">
                               {explanationMode === 'gigachat'
-                                ? 'ОБЪЯСНЕНИЕ GIGACHAT'
-                                : 'ПОЯСНЕНИЕ ПРИЛОЖЕНИЯ'}
+                                ? 'Объяснение GigaChat'
+                                : 'Пояснение приложения'}
                             </span>
                             <h2>Бюджет человеческим языком</h2>
                             <p>{explanation || 'Укажи допущения ниже, чтобы получить расчёт.'}</p>
@@ -549,7 +582,7 @@ export function App() {
                           <section className="glass">
                             <div className="section-heading">
                               <h2>Может повториться</h2>
-                              <span className="tag">ГИПОТЕЗА</span>
+                              <span className="tag">Гипотеза</span>
                             </div>
                             <p className="muted small">
                               По признакам в выписке. Не добавляем в будущие платежи автоматически.
@@ -673,14 +706,16 @@ export function App() {
         </div>
       </div>
       <div className="outside-caption">Деньги — часть жизни. Не вся жизнь.</div>
-      <GigaAdvisor
-        screen={page}
-        assumptions={assumptions}
-        importId={imported?.id}
-        open={advisorOpen}
-        onOpenChange={setAdvisorOpen}
-        action={advisorAction}
-      />
+      <div inert={uploadOpen || undefined} aria-hidden={uploadOpen || undefined}>
+        <GigaAdvisor
+          screen={page}
+          assumptions={assumptions}
+          importId={imported?.id}
+          open={advisorOpen}
+          onOpenChange={setAdvisorOpen}
+          action={advisorAction}
+        />
+      </div>
       {uploadOpen && (
         <div
           className="modal-backdrop"
@@ -689,6 +724,8 @@ export function App() {
           }}
         >
           <section
+            ref={uploadDialog}
+            tabIndex={-1}
             className="modal glass"
             role="dialog"
             aria-modal="true"
@@ -702,7 +739,7 @@ export function App() {
             >
               ×
             </button>
-            <span className="eyebrow">ШАГ 01 / ВЫПИСКА</span>
+            <span className="eyebrow">Шаг 1 из 2: выписка</span>
             <h2 id="upload-title">Начнём с твоих операций</h2>
             <p className="muted">
               CSV в UTF-8 — до 2 МБ. Для текстового PDF нет ограничения по размеру, страницам и

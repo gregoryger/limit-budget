@@ -43,7 +43,7 @@ export function BudgetInputs({
             Остаток — на конец выбранного дня. Уже прошедшие операции повторно не вычитаются.
           </p>
         </div>
-        <span className="tag">{demo ? 'ПАРАМЕТРЫ ДЕМО' : 'ВАШИ ДАННЫЕ'}</span>
+        <span className="tag">{demo ? 'Параметры демо' : 'Ваши данные'}</span>
       </div>
       <div className="fields three">
         <label>

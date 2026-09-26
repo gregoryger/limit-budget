@@ -18,7 +18,7 @@ export function Accounts({
     <>
       <div className="section-heading">
         <div>
-          <p className="eyebrow">МОИ СЧЕТА</p>
+          <p className="eyebrow">Мои счета</p>
           <h1>Карты и счета</h1>
           <p className="muted">Всё под рукой. Две условные карты — без подключения к банку.</p>
         </div>
@@ -52,7 +52,7 @@ export function Accounts({
         ))}
         <div className="account-stack">
           <section className="glass glow-panel">
-            <span className="eyebrow">ОБЩИЙ ОСТАТОК</span>
+            <span className="eyebrow">Общий остаток</span>
             <p className="account-total">
               {assumptions.currentBalanceKopecks === null
                 ? 'Не указан'

@@ -80,7 +80,7 @@ export function Review({
     <section className="review">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">ШАГ 02 / ПРОВЕРКА</p>
+          <p className="eyebrow">Шаг 2 из 2: проверка</p>
           <h1>Всё ли верно?</h1>
           <p className="muted">
             Исходные строки рядом с операциями. Вы решаете, что попадёт в бюджет.
