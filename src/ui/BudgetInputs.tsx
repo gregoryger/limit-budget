@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { assumptionsSchema, type Assumptions } from '../../shared/budget-calculation';
 import { parseMoney } from '../../shared/transactions';
 export function BudgetInputs({
@@ -12,6 +12,7 @@ export function BudgetInputs({
 }) {
   const [draft, setDraft] = useState(value);
   const [error, setError] = useState('');
+  useEffect(() => setDraft(value), [value]);
   const money = (
     key:
       | 'currentBalanceKopecks'

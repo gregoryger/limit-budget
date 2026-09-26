@@ -19,11 +19,39 @@ test('actual file → review → audited import → forecast → transfer simula
   await page.getByRole('button', { name: 'Подтвердить импорт' }).click();
   await expect(page.getByText('Давай уточним пару вещей')).toBeVisible();
   await page.getByLabel('Текущий остаток').fill('21400');
-  await page.getByLabel('Обязательные платежи').fill('8900');
+  await page.getByLabel('Обязательные платежи', { exact: true }).fill('8900');
   await page.getByRole('button', { name: 'Рассчитать прогноз' }).click();
   await expect(page.getByText('Да, по твоему плану хватит')).toBeVisible();
   await expect(page.locator('.forecast-card')).toContainText('9 500');
+  await expect(page.getByRole('button', { name: 'Сценарии', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Свободные деньги', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Свободные деньги', exact: true })).toBeVisible();
+  await expect(page.locator('.free-money-result')).toContainText('12 500');
+  await page.getByLabel('Обязательный платёж: Аренда и жильё').fill('3500');
+  await expect(page.getByLabel('Обязательный платёж: Другие обязательные платежи')).toHaveValue(
+    '5400',
+  );
+  await page.getByLabel('Обязательный платёж: Связь').fill('500');
+  await page.getByLabel('Обязательный платёж: Транспорт').fill('850');
+  await page.getByLabel('Обязательный платёж: Подписки').fill('299');
+  await page.getByLabel('Обязательный платёж: Другие обязательные платежи').fill('3751');
+  await expect(page.locator('.free-money-total')).toContainText('8 900');
+  await page.getByRole('button', { name: 'Сохранить платежи и обновить прогноз' }).click();
+  await expect(page.locator('.free-money-result')).toContainText('12 500');
+  await page.getByLabel('Обязательный платёж: Другие обязательные платежи').fill('4751');
+  await expect(page.locator('.free-money-result')).toContainText('11 500');
+  await page.getByRole('button', { name: 'Сохранить платежи и обновить прогноз' }).click();
+  await page.getByRole('button', { name: 'Обзор', exact: true }).click();
+  await expect(page.locator('.forecast-card')).toContainText('8 500');
+  await expect(page.getByLabel('Обязательные платежи', { exact: true })).toHaveValue('9900');
+  await page.getByRole('button', { name: 'Свободные деньги', exact: true }).click();
+  await page.getByLabel('Обязательный платёж: Другие обязательные платежи').fill('3751');
+  await page.getByRole('button', { name: 'Сохранить платежи и обновить прогноз' }).click();
+  await page.getByRole('button', { name: 'Обзор', exact: true }).click();
+  await expect(page.locator('.forecast-card')).toContainText('9 500');
   await page.screenshot({ path: 'test-results/03-overview-result.png', fullPage: true });
+  await page.getByRole('button', { name: 'Свободные деньги', exact: true }).click();
+  await page.screenshot({ path: 'test-results/03-free-money.png', fullPage: true });
   await page.getByRole('button', { name: 'Карты и счета', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Карты и счета' })).toBeVisible();
   await page.screenshot({ path: 'test-results/04-accounts.png', fullPage: true });
@@ -31,7 +59,7 @@ test('actual file → review → audited import → forecast → transfer simula
   await page.getByLabel('Сумма перевода').fill('2000');
   await expect(page.locator('.large-number')).toContainText('7 500');
   await page.screenshot({ path: 'test-results/05-transfers.png', fullPage: true });
-  await page.getByRole('button', { name: 'Сценарии', exact: true }).click();
+  await page.getByRole('button', { name: 'Что будет, если…', exact: true }).click();
   await expect(page.getByLabel('Сценарий ежедневных трат')).toHaveCount(0);
   await page.getByLabel('Вопрос для симулятора').fill('Что будет, если куплю телефон за 50 000?');
   await page.getByRole('button', { name: 'Рассчитать', exact: true }).click();
@@ -64,6 +92,8 @@ test('mobile demo button and manual correction remain usable', async ({ page }) 
   await page.getByLabel('Причина строки 13', { exact: true }).fill('Исключаю неизвестную операцию');
   await page.getByRole('button', { name: 'Подтвердить импорт' }).click();
   await expect(page.getByText('31 600')).toBeVisible();
+  await page.getByRole('button', { name: 'Свободные деньги', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Свободные деньги', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );

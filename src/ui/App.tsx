@@ -20,18 +20,21 @@ import {
 } from 'lucide-react';
 import { calculateBudget, type Assumptions, type Budget } from '../../shared/budget-calculation';
 import { rub, type ImportResult, type Transaction } from '../../shared/transactions';
+import { type ObligationBreakdown } from '../../shared/free-money';
 import { api, json } from './api';
 import { Review } from './Review';
 import { BudgetInputs } from './BudgetInputs';
+import { FreeMoney } from './FreeMoney';
 import { CategoryChart, ProjectionChart } from './Charts';
 import { Scenarios } from './Scenarios';
 import { Accounts } from './Accounts';
-type Page = 'Обзор' | 'Карты и счета' | 'Переводы' | 'Сценарии';
+type Page = 'Обзор' | 'Карты и счета' | 'Переводы' | 'Что будет, если…' | 'Свободные деньги';
 const nav = [
   { name: 'Обзор' as Page, icon: LayoutDashboard },
   { name: 'Карты и счета' as Page, icon: CreditCard },
   { name: 'Переводы' as Page, icon: ArrowUpRight },
-  { name: 'Сценарии' as Page, icon: FlaskConical },
+  { name: 'Что будет, если…' as Page, icon: FlaskConical },
+  { name: 'Свободные деньги' as Page, icon: Wallet },
 ];
 function initialAssumptions(demo: boolean): Assumptions {
   const now = new Date();
@@ -58,6 +61,7 @@ export function App() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [audit, setAudit] = useState<unknown[]>([]);
   const [assumptions, setAssumptions] = useState<Assumptions>(initialAssumptions(false));
+  const [obligations, setObligations] = useState<ObligationBreakdown | null>(null);
   const [explanation, setExplanation] = useState('');
   const [explanationMode, setExplanationMode] = useState('local');
   const [busy, setBusy] = useState(false);
@@ -123,7 +127,7 @@ export function App() {
     URL.revokeObjectURL(url);
   }
   async function compute(value: Assumptions, id = imported?.id) {
-    if (!id) return;
+    if (!id) return false;
     setBusy(true);
     setError('');
     try {
@@ -134,11 +138,21 @@ export function App() {
       setAssumptions(result.budget.assumptions);
       setExplanation(result.explanation);
       setExplanationMode(result.explanationMode);
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка расчёта');
+      return false;
     } finally {
       setBusy(false);
     }
+  }
+  async function saveBudgetInputs(value: Assumptions) {
+    const totalChanged = value.futurePaymentsKopecks !== assumptions.futurePaymentsKopecks;
+    if ((await compute(value)) && totalChanged) setObligations(null);
+  }
+  async function saveObligations(value: ObligationBreakdown) {
+    const total = Object.values(value).reduce((sum, amount) => sum + amount, 0);
+    if (await compute({ ...assumptions, futurePaymentsKopecks: total })) setObligations(value);
   }
   function confirmed(t: Transaction[], a: unknown[]) {
     const next = initialAssumptions(review!.mode === 'demo');
@@ -146,6 +160,7 @@ export function App() {
     setTransactions(t);
     setAudit(a);
     setAssumptions(next);
+    setObligations(null);
     setReview(null);
     setPage('Обзор');
     void compute(next, review!.id);
@@ -158,12 +173,13 @@ export function App() {
     setAudit([]);
     setExplanation('');
     setAssumptions(initialAssumptions(false));
+    setObligations(null);
     setPage('Обзор');
     for (const id of ids) await api(`/api/import/${id}`, { method: 'DELETE' }).catch(() => {});
   }
   function downloadAudit() {
     const blob = new Blob(
-      [JSON.stringify({ mode: imported?.mode, transactions, audit, budget }, null, 2)],
+      [JSON.stringify({ mode: imported?.mode, transactions, audit, budget, obligations }, null, 2)],
       { type: 'application/json' },
     );
     const url = URL.createObjectURL(blob);
@@ -466,7 +482,10 @@ export function App() {
                                 {budget.dailyLimit === null ? '—' : rub(budget.dailyLimit)}
                               </strong>
                             </div>
-                            <button className="text-link" onClick={() => setPage('Сценарии')}>
+                            <button
+                              className="text-link"
+                              onClick={() => setPage('Что будет, если…')}
+                            >
                               Посмотреть «Что, если»
                               <ArrowRight size={17} />
                             </button>
@@ -475,7 +494,7 @@ export function App() {
                         <BudgetInputs
                           key={imported?.id}
                           value={assumptions}
-                          onSave={compute}
+                          onSave={(value) => void saveBudgetInputs(value)}
                           busy={busy}
                         />
                         <div className="analysis-grid">
@@ -530,7 +549,52 @@ export function App() {
                     onSimulate={() => setPage('Переводы')}
                   />
                 )}
-                {(page === 'Сценарии' || page === 'Переводы') &&
+                {page === 'Свободные деньги' &&
+                  (hasData ? (
+                    <>
+                      <div className="section-heading">
+                        <div>
+                          <p className="eyebrow">ВАШИ ДЕНЬГИ ПОСЛЕ ОБЯЗАТЕЛЬСТВ</p>
+                          <h1>Свободные деньги</h1>
+                          <p className="muted">
+                            Отдельно от прогноза: только текущий баланс и предстоящие обязательные
+                            платежи.
+                          </p>
+                        </div>
+                        <Wallet className="heading-icon" size={34} />
+                      </div>
+                      <FreeMoney
+                        key={`${imported?.id}:${assumptions.futurePaymentsKopecks}:${JSON.stringify(obligations)}`}
+                        currentBalanceKopecks={assumptions.currentBalanceKopecks}
+                        futurePaymentsKopecks={assumptions.futurePaymentsKopecks}
+                        breakdown={obligations}
+                        endDate={assumptions.endDate}
+                        busy={busy}
+                        onSave={(value) => void saveObligations(value)}
+                      />
+                      <div className="notice free-money-navigation">
+                        <span>
+                          Остаток и даты периода задаются в «Обзоре». Вероятные повторные платежи
+                          там же — проверьте их перед добавлением.
+                        </span>
+                        <button className="text-link" onClick={() => setPage('Обзор')}>
+                          Изменить баланс или период <ArrowRight size={16} />
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <section className="glass empty-state">
+                      <Wallet size={44} />
+                      <h1>Сначала — твой бюджет</h1>
+                      <p className="muted">
+                        Загрузи выписку и укажи баланс, чтобы посчитать свободные деньги.
+                      </p>
+                      <button className="primary" onClick={() => setPage('Обзор')}>
+                        Перейти к загрузке <ArrowRight size={18} />
+                      </button>
+                    </section>
+                  ))}
+                {(page === 'Что будет, если…' || page === 'Переводы') &&
                   (hasData ? (
                     <Scenarios
                       key={page + imported?.id}
@@ -589,8 +653,8 @@ export function App() {
             <span className="eyebrow">ШАГ 01 / ВЫПИСКА</span>
             <h2 id="upload-title">Начнём с твоих операций</h2>
             <p className="muted">
-              CSV в UTF-8 — до 2 МБ. Для текстового PDF нет ограничения по размеру,
-              страницам и числу строк. Сканированные PDF пока не поддерживаются.
+              CSV в UTF-8 — до 2 МБ. Для текстового PDF нет ограничения по размеру, страницам и
+              числу строк. Сканированные PDF пока не поддерживаются.
             </p>
             <button className="dropzone" disabled={busy} onClick={() => fileInput.current?.click()}>
               <Upload size={30} />
@@ -619,8 +683,8 @@ export function App() {
             {file?.name.toLowerCase().endsWith('.pdf') && (
               <div className="anonymize-option">
                 <p className="small muted">
-                  Если PDF содержит полные реквизиты, сначала обезличьте его локально. Для таблиц
-                  с датой и суммой сервис создаст CSV без имён, номеров и исходных описаний.
+                  Если PDF содержит полные реквизиты, сначала обезличьте его локально. Для таблиц с
+                  датой и суммой сервис создаст CSV без имён, номеров и исходных описаний.
                 </p>
                 <button className="secondary" disabled={busy} onClick={anonymizePdf}>
                   Обезличить PDF и подготовить CSV
