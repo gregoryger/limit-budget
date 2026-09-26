@@ -537,6 +537,7 @@ export function App() {
                       transactions={transactions}
                       assumptions={assumptions}
                       transferMode={page === 'Переводы'}
+                      importId={imported!.id}
                     />
                   ) : (
                     <section className="glass empty-state">

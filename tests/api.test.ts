@@ -63,6 +63,23 @@ describe('HTTP import to calculated budget', () => {
       .expect(200);
     expect(result.body.budget.projected).toBe(950000);
     expect(result.body.explanationMode).toBe('local');
+    const scenario = await request(app)
+      .post('/api/scenario')
+      .send({
+        importId: review.id,
+        assumptions,
+        expense: {
+          description: 'телефон',
+          amountKopecks: 5000000,
+          frequency: 'once',
+          firstPaymentDate: '2026-09-26',
+        },
+      })
+      .expect(200);
+    expect(scenario.body.comparison.budget.projected).toBe(-4050000);
+    expect(scenario.body.decision.recommendation).toBe('wait');
+    expect(scenario.body.decision.waitUntil).toMatch(/^2026-/);
+    expect(scenario.body.explanationMode).toBe('local');
     await request(app).delete(`/api/import/${review.id}`).expect(204);
     await request(app).post('/api/budget').send({ importId: review.id, assumptions }).expect(404);
   });

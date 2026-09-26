@@ -7,10 +7,10 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "concurrently -k -n server,client \"tsx watch server/index.ts\" \"vite --host 127.0.0.1\"",
-    "build": "tsc --noEmit && vite build && tsc -p tsconfig.server.json",
+    "dev": "concurrently -k -n server,client \"tsx watch server/index.ts\" \"vite --configLoader runner --host 127.0.0.1\"",
+    "build": "tsc --noEmit && vite build --configLoader runner && tsc -p tsconfig.server.json",
     "start": "node dist-server/server/index.js",
-    "test": "vitest run",
+    "test": "vitest run --configLoader runner",
     "test:e2e": "playwright test",
     "format": "prettier --write src server shared tests docs README.md package.json *.config.ts tsconfig*.json"
   },

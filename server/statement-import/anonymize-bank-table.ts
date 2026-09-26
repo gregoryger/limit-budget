@@ -19,7 +19,7 @@ export async function anonymizeBankTablePdf(buffer: Buffer) {
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber++) {
       const content = await (await document.getPage(pageNumber)).getTextContent();
       const cells: Cell[] = content.items
-        .filter((item): item is typeof item & { str: string } => 'str' in item)
+        .filter((item) => 'str' in item && 'transform' in item)
         .map((item) => ({
           x: Math.round(item.transform[4]),
           y: Math.round(item.transform[5]),
@@ -46,7 +46,9 @@ export async function anonymizeBankTablePdf(buffer: Buffer) {
         }
         const amount = matching[0].value.replace(/\s/g, '').replace(',', '.');
         const income = amount.startsWith('+');
-        lines.push(`${date};${income ? 'Поступление' : 'Расход'};${amount};${income ? 'income' : 'expense'}`);
+        lines.push(
+          `${date};${income ? 'Поступление' : 'Расход'};${amount};${income ? 'income' : 'expense'}`,
+        );
         operations++;
       }
     }

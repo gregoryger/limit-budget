@@ -8,8 +8,9 @@ import { extractStatement, InputError } from './statement-import/parser.js';
 import { anonymizeBankTablePdf } from './statement-import/anonymize-bank-table.js';
 import { validateModelResponse } from './transactions/validate.js';
 import { demoResponse } from './gigachat/demo-response.js';
-import { explainBudget, extractWithGigaChat, isConfigured } from './gigachat/adapter.js';
+import { explainBudget, explainScenarioDecision, extractWithGigaChat, isConfigured } from './gigachat/adapter.js';
 import { assumptionsSchema, calculateBudget } from '../shared/budget-calculation.js';
+import { decideScenario, plannedExpenseSchema, simulatePlannedExpense } from '../shared/scenarios.js';
 import { transactionSchema, type ImportResult, type Transaction } from '../shared/transactions.js';
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -205,6 +206,29 @@ app.post('/api/budget', async (req, res) => {
       explanation = `${local} Объяснение GigaChat сейчас недоступно.`;
     }
   res.json({ budget, explanation, explanationMode });
+});
+app.post('/api/scenario', async (req, res) => {
+  const payload = z
+    .object({ importId: z.string(), assumptions: assumptionsSchema, expense: plannedExpenseSchema })
+    .strict()
+    .parse(req.body);
+  const session = getSession(payload.importId);
+  if (!session.transactions) throw new InputError('Сначала подтвердите импорт.');
+  if (payload.expense.firstPaymentDate <= payload.assumptions.asOf)
+    throw new InputError('Первый платёж должен быть позже даты остатка.');
+  const comparison = simulatePlannedExpense(session.transactions, payload.assumptions, payload.expense);
+  const decision = decideScenario(session.transactions, comparison);
+  let explanation = decision.reason;
+  let explanationMode: 'gigachat' | 'local' = 'local';
+  if (session.review.mode === 'gigachat' && isConfigured()) {
+    try {
+      explanation = await explainScenarioDecision(comparison, decision);
+      explanationMode = 'gigachat';
+    } catch {
+      explanation = `${decision.reason} Объяснение GigaChat сейчас недоступно.`;
+    }
+  }
+  res.json({ comparison, decision, explanation, explanationMode });
 });
 app.delete('/api/import/:id', (req, res) => {
   sessions.delete(String(req.params.id));
