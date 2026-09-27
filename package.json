@@ -10,6 +10,7 @@
     "dev": "concurrently -k -n server,client \"node --use-system-ca --import tsx --watch server/index.ts\" \"vite --host 127.0.0.1\"",
     "build": "tsc --noEmit && vite build && tsc -p tsconfig.server.json",
     "start": "node --use-system-ca dist-server/server/index.js",
+    "build:pages": "tsc --noEmit && vite build --mode pages --base=./ --outDir dist-pages",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "format": "prettier --write src server shared tests docs README.md package.json *.config.ts tsconfig*.json"

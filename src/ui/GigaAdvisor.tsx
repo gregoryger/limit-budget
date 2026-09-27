@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Sparkles, X } from 'lucide-react';
 import type { AdvisorRequest, AdvisorResponse } from '../../shared/advisor';
 import type { Assumptions } from '../../shared/budget-calculation';
-import { api, json } from './api';
+import { api, json, STATIC_DEMO } from './api';
 
 export type AdvisorExtras = Pick<
   AdvisorRequest,
@@ -142,9 +142,20 @@ export function GigaAdvisor({
                 ? 'Проверяем подключение'
                 : configured
                   ? (answer ? 'GigaChat ответил' : 'Ключ настроен') + ' · экран «' + screen + '»'
-                  : 'Нужна настройка сервера'}
+                  : STATIC_DEMO
+                    ? 'Онлайн-демо без сервера'
+                    : 'Нужна настройка сервера'}
             </span>
-            {configured === false ? (
+            {configured === false && STATIC_DEMO ? (
+              <div className="advisor-empty">
+                <h3>GigaChat доступен локально</h3>
+                <p>
+                  Онлайн-демо работает без сервера, поэтому советы GigaChat здесь не приходят. Все
+                  расчёты на экранах доступны. Чтобы поговорить с GigaChat, запусти проект локально
+                  с ключом в <code>.env</code>.
+                </p>
+              </div>
+            ) : configured === false ? (
               <div className="advisor-empty">
                 <h3>Подключите GigaChat</h3>
                 <p>

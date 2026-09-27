@@ -7,7 +7,7 @@ import type { ScenarioAiResponse } from '../../shared/scenario-ai';
 import { parseMoney, rub, type Transaction } from '../../shared/transactions';
 import { ProjectionChart } from './Charts';
 import type { AdvisorExtras } from './GigaAdvisor';
-import { api, json } from './api';
+import { api, json, STATIC_DEMO } from './api';
 export function Scenarios({
   transactions,
   assumptions,
@@ -121,7 +121,7 @@ export function Scenarios({
             <button
               className="primary"
               type="submit"
-              disabled={questionLoading || !question.trim()}
+              disabled={STATIC_DEMO || questionLoading || !question.trim()}
             >
               {questionLoading ? 'Анализируем…' : 'Спросить GigaChat'}
             </button>
@@ -135,6 +135,7 @@ export function Scenarios({
               <button
                 key={preset}
                 className="secondary"
+                disabled={STATIC_DEMO}
                 onClick={() => {
                   setQuestion(preset);
                   void applyQuestion(preset);
@@ -144,6 +145,12 @@ export function Scenarios({
               </button>
             ))}
           </div>
+          {STATIC_DEMO && (
+            <p className="muted small">
+              В онлайн-демо GigaChat не подключён. Задай сумму вручную в блоке ниже — расчёт
+              сработает сразу.
+            </p>
+          )}
           {questionError && (
             <p className="error" role="alert">
               {questionError}

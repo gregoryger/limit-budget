@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { calculateBudget, type Assumptions, type Budget } from '../../shared/budget-calculation';
 import { rub, type ImportResult, type Transaction } from '../../shared/transactions';
-import { api, json } from './api';
+import { api, json, STATIC_DEMO } from './api';
 import { Review } from './Review';
 import { BudgetInputs } from './BudgetInputs';
 import { CategoryChart, ProjectionChart } from './Charts';
@@ -355,25 +355,27 @@ export function App() {
                         </h1>
                         <p className="muted">Понимай свой бюджет. Живи в своём ритме.</p>
                       </div>
-                      <div className="overview-actions">
-                        <button
-                          className="primary"
-                          disabled={busy}
-                          onClick={() => setUploadOpen(true)}
-                        >
-                          <Upload size={17} />
-                          Загрузить выписку
-                        </button>
-                        {showcaseMode && (
+                      {!STATIC_DEMO && (
+                        <div className="overview-actions">
                           <button
-                            className="text-link demo-import-link"
+                            className="primary"
                             disabled={busy}
-                            onClick={() => startImport(true)}
+                            onClick={() => setUploadOpen(true)}
                           >
-                            Попробовать демо <ArrowRight size={15} />
+                            <Upload size={17} />
+                            Загрузить выписку
                           </button>
-                        )}
-                      </div>
+                          {showcaseMode && (
+                            <button
+                              className="text-link demo-import-link"
+                              disabled={busy}
+                              onClick={() => startImport(true)}
+                            >
+                              Попробовать демо <ArrowRight size={15} />
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                     {!hasData ? (
                       <>
@@ -401,7 +403,11 @@ export function App() {
                                 Попробовать демо
                                 <ArrowRight size={18} />
                               </button>
-                              <a className="text-link" href="/demo-statement.csv" download>
+                              <a
+                                className="text-link"
+                                href={`${import.meta.env.BASE_URL}demo-statement.csv`}
+                                download
+                              >
                                 <Download size={16} />
                                 Пример CSV
                               </a>
@@ -816,7 +822,11 @@ export function App() {
               </p>
             )}
             <div className="modal-bottom">
-              <a className="text-link" href="/demo-statement.csv" download>
+              <a
+                className="text-link"
+                href={`${import.meta.env.BASE_URL}demo-statement.csv`}
+                download
+              >
                 Скачать пример
               </a>
               <button className="text-link" disabled={busy} onClick={() => startImport(true)}>
