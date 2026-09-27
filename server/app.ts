@@ -21,6 +21,11 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { files: 1, fields: 2 },
 });
+// multer читает имя файла как latin1, а браузеры отправляют его в UTF-8.
+function uploadedName(originalname: string) {
+  const decoded = Buffer.from(originalname, 'latin1').toString('utf8');
+  return path.basename(decoded.includes(String.fromCharCode(0xfffd)) ? originalname : decoded);
+}
 type Session = { review: ImportResult; transactions?: Transaction[]; audit?: unknown[] };
 const sessions = new Map<string, Session>();
 const demoFile = () => readFile(path.resolve('public/demo-statement.csv'));
@@ -138,7 +143,7 @@ app.post('/api/import', upload.single('file'), async (req, res) => {
   const demoRequested = req.body.demo === 'true';
   if (!demoRequested && !req.file) throw new InputError('Выберите выписку.');
   const buffer = demoRequested ? await demoFile() : req.file!.buffer;
-  const filename = demoRequested ? 'demo-statement.csv' : path.basename(req.file!.originalname);
+  const filename = demoRequested ? 'demo-statement.csv' : uploadedName(req.file!.originalname);
   const rows = await extractStatement(
     buffer,
     filename,

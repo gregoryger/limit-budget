@@ -17,8 +17,11 @@ test('budget story explains actual amounts, pauses, finishes and respects reduce
   await expect(page.getByRole('button', { name: 'Показать разбор бюджета' })).toBeVisible();
   await page.getByRole('button', { name: 'Показать разбор бюджета' }).click();
   await expect(page.getByRole('button', { name: 'Показать разбор бюджета' })).toBeVisible({
-    timeout: 10000,
+    timeout: 15000,
   });
+  await page.getByRole('button', { name: 'Показать разбор бюджета' }).click();
+  await expect(page.getByRole('button', { name: 'Приостановить разбор бюджета' })).toBeVisible();
+  await expect(page.locator('.budget-story svg rect').nth(1)).toHaveAttribute('width', '376');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(page.getByRole('button', { name: 'Показать разбор бюджета' })).toHaveCount(0);
   await expect(story).toContainText('Остаток − обязательные платежи = свободные деньги');

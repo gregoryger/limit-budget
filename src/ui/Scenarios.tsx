@@ -23,6 +23,8 @@ export function Scenarios({
 }) {
   const [daily, setDaily] = useState(assumptions.dailySpendKopecks);
   const [transfer, setTransfer] = useState(0);
+  // Текст поля отдельно от суммы: поле можно очистить, пустое значение считается нулём.
+  const [transferText, setTransferText] = useState('0');
   const [recipient, setRecipient] = useState('');
   const [question, setQuestion] = useState('Что будет, если куплю телефон за 50 000 ₽?');
   const [analysis, setAnalysis] = useState<ScenarioAiResponse | null>(null);
@@ -275,10 +277,14 @@ export function Scenarios({
                   min="0"
                   max={maxTransfer / 100}
                   step="0.01"
-                  value={transfer / 100}
-                  onChange={(e) =>
-                    setTransfer(Math.min(parseMoney(e.target.value) ?? 0, maxTransfer))
-                  }
+                  value={transferText}
+                  onChange={(e) => {
+                    const value = parseMoney(e.target.value) ?? 0;
+                    setTransfer(Math.min(value, maxTransfer));
+                    setTransferText(
+                      value > maxTransfer ? String(maxTransfer / 100) : e.target.value,
+                    );
+                  }}
                 />
               </label>
               <label>
@@ -306,6 +312,7 @@ export function Scenarios({
                 onClick={() => {
                   setDaily(assumptions.dailySpendKopecks);
                   setTransfer(0);
+                  setTransferText('0');
                   setAnalysis(null);
                   setQuestionError('');
                 }}

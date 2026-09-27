@@ -48,6 +48,8 @@ export type SourceRow = {
   amountKopecks: number | null;
   direction: 'income' | 'expense' | null;
   issue?: string;
+  /** Строка разобрана из табличной PDF-выписки банка: дата, сумма и описание уже проверены. */
+  origin?: 'bank-table';
 };
 export type ReviewRow = { source: SourceRow; transaction: Transaction | null; issues: string[] };
 export type ImportResult = {

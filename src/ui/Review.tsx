@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, ChevronRight } from 'lucide-react';
 import {
   categories,
@@ -46,6 +46,15 @@ export function Review({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [page, setPage] = useState(0);
+  const firstPage = useRef(true);
+  useEffect(() => {
+    // При листании нижними кнопками возвращаемся к началу списка.
+    if (firstPage.current) {
+      firstPage.current = false;
+      return;
+    }
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [page]);
   const pageSize = 50;
   const pageCount = Math.ceil(data.rows.length / pageSize);
   const unresolved = decisions.filter((d) => !d.include && !d.reason.trim()).length;

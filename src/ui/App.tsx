@@ -76,6 +76,11 @@ export function App() {
   }, [page]);
   const [review, setReview] = useState<ImportResult | null>(null);
   const [imported, setImported] = useState<ImportResult | null>(null);
+  // Экран проверки выписки и результат импорта открываются с верха страницы, а не там,
+  // где пользователь нажал кнопку внизу.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [review?.id, imported?.id]);
   const [transactions, setTransactions] = useState<Transaction[]>(showcase.transactions);
   const [audit, setAudit] = useState<unknown[]>([]);
   const [assumptions, setAssumptions] = useState<Assumptions>(showcase.assumptions);
@@ -611,14 +616,14 @@ export function App() {
                             )}
                           </section>
                         </div>
-                        {showcaseMode ? (
-                          <details className="glass source-details demo-transactions">
-                            <summary>Посмотреть все вымышленные операции</summary>
-                            <Transactions transactions={transactions} onDownload={downloadAudit} />
-                          </details>
-                        ) : (
+                        <details className="glass source-details demo-transactions">
+                          <summary>
+                            {showcaseMode
+                              ? 'Посмотреть все вымышленные операции'
+                              : `История операций · ${transactions.length}`}
+                          </summary>
                           <Transactions transactions={transactions} onDownload={downloadAudit} />
-                        )}
+                        </details>
                         {!showcaseMode && (
                           <details className="glass source-details">
                             <summary>Исходные строки, решения и допущения</summary>

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import request from 'supertest';
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { app } from '../server/app';
-import type { ImportResult, SourceRow } from '../shared/transactions';
+import { rub, type ImportResult, type SourceRow } from '../shared/transactions';
 import { demoResponse } from '../server/gigachat/demo-response';
 import { bankTablePdfFixture, multipagePdfFixture } from './helpers';
 function decisions(review: ImportResult) {
@@ -160,7 +160,8 @@ describe('HTTP import to calculated budget', () => {
     expect(body.explanationMode).toBe('gigachat');
     expect(body.budget.projected).toBe(950000);
     const lastBody = JSON.parse(fetchMock.mock.calls.at(-1)![1].body);
-    expect(JSON.parse(lastBody.messages[1].content).projected).toBe(950000);
+    // В модель уходят рубли, а не копейки.
+    expect(JSON.parse(lastBody.messages[1].content).forecast.leftAtEnd).toBe(rub(950000));
   });
   it('marks the fallback explicitly when provider transport fails for the fixture', async () => {
     vi.stubEnv('GIGACHAT_AUTH_KEY', 'test-only-placeholder');

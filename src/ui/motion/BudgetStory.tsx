@@ -73,6 +73,7 @@ function FlowVisual({ balance, obligations, progress }: MoneyFlow & { progress: 
 
 export function BudgetStory({ balance, obligations }: MoneyFlow) {
   const player = useRef<PlayerRef>(null);
+  const finished = useRef(true);
   const [playing, setPlaying] = useState(false);
   const [reduced, setReduced] = useState(
     () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -88,9 +89,15 @@ export function BudgetStory({ balance, obligations }: MoneyFlow) {
   }, []);
   useEffect(() => {
     setPlaying(false);
+    finished.current = true;
     const current = player.current;
     if (!current) return;
-    const ended = () => setPlaying(false);
+    const play = () => setPlaying(true);
+    const pause = () => setPlaying(false);
+    const ended = () => {
+      finished.current = true;
+      setPlaying(false);
+    };
     const hide = () => {
       if (document.hidden) {
         current.pause();
@@ -98,21 +105,29 @@ export function BudgetStory({ balance, obligations }: MoneyFlow) {
       }
     };
     current.addEventListener('ended', ended);
+    current.addEventListener('play', play);
+    current.addEventListener('pause', pause);
     document.addEventListener('visibilitychange', hide);
     return () => {
       current.removeEventListener('ended', ended);
+      current.removeEventListener('play', play);
+      current.removeEventListener('pause', pause);
       document.removeEventListener('visibilitychange', hide);
     };
   }, [balance, obligations, reduced]);
   const toggle = () => {
     const current = player.current;
     if (!current) return;
-    if (playing) current.pause();
+    if (current.isPlaying()) current.pause();
     else {
-      if (current.getCurrentFrame() >= frames - 1) current.seekTo(0);
+      // The player can stop just before the last frame when the browser skips frames.
+      // Remember completion explicitly so replay always starts at the beginning.
+      if (finished.current) {
+        current.seekTo(0);
+        finished.current = false;
+      }
       current.play();
     }
-    setPlaying(!playing);
   };
   return (
     <figure className="budget-story">

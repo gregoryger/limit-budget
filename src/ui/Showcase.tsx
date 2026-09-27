@@ -278,10 +278,15 @@ export function GoalPlanner({
       (assumptions.futurePaymentsKopecks ?? 0) -
       assumptions.dailySpendKopecks * 30,
   );
-  const [target, setTarget] = useState(100_000);
-  const [saved, setSaved] = useState(0);
-  const [monthly, setMonthly] = useState(Math.round(defaultMonthly / 100));
-  const months = monthsToGoal(target * 100, saved * 100, monthly * 100);
+  // Поля хранят введённый текст, чтобы значение можно было стереть и набрать заново.
+  const [targetText, setTargetText] = useState('100000');
+  const [savedText, setSavedText] = useState('0');
+  const [monthlyText, setMonthlyText] = useState(String(Math.round(defaultMonthly / 100)));
+  const amount = (text: string) => Math.max(0, Number(text) || 0);
+  const target = amount(targetText);
+  const saved = amount(savedText);
+  const monthly = amount(monthlyText);
+  const months = target > 0 ? monthsToGoal(target * 100, saved * 100, monthly * 100) : null;
   const date =
     months === null
       ? null
@@ -291,7 +296,10 @@ export function GoalPlanner({
         );
   const variants = [0.65, 1, 1.4].map((factor) => ({
     monthly: Math.round(monthly * factor),
-    months: monthsToGoal(target * 100, saved * 100, Math.round(monthly * factor) * 100),
+    months:
+      target > 0
+        ? monthsToGoal(target * 100, saved * 100, Math.round(monthly * factor) * 100)
+        : null,
   }));
   return (
     <div className="feature-page">
@@ -314,8 +322,8 @@ export function GoalPlanner({
             <input
               type="number"
               min="1"
-              value={target}
-              onChange={(e) => setTarget(Math.max(1, Number(e.target.value) || 1))}
+              value={targetText}
+              onChange={(e) => setTargetText(e.target.value)}
             />
           </label>
           <label>
@@ -323,8 +331,8 @@ export function GoalPlanner({
             <input
               type="number"
               min="0"
-              value={saved}
-              onChange={(e) => setSaved(Math.max(0, Number(e.target.value) || 0))}
+              value={savedText}
+              onChange={(e) => setSavedText(e.target.value)}
             />
           </label>
           <label>
@@ -332,8 +340,8 @@ export function GoalPlanner({
             <input
               type="number"
               min="0"
-              value={monthly}
-              onChange={(e) => setMonthly(Math.max(0, Number(e.target.value) || 0))}
+              value={monthlyText}
+              onChange={(e) => setMonthlyText(e.target.value)}
             />
           </label>
           <p className="muted small">

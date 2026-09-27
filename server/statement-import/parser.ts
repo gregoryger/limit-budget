@@ -1,6 +1,6 @@
 import { parse } from 'csv-parse/sync';
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { dateSchema, parseMoney, type SourceRow } from '../../shared/transactions.js';
+import { loadPdfPages, readBankTable } from './bank-table.js';
 export class InputError extends Error {
   constructor(
     message: string,
@@ -109,23 +109,36 @@ export async function extractStatement(
       buffer.subarray(0, 5).toString() !== '%PDF-'
     )
       throw new InputError('Неверный тип PDF.');
-    const task = getDocument({ data: new Uint8Array(buffer), useSystemFonts: true });
-    const lines: string[] = [];
-    try {
-      const doc = await task.promise;
-      for (let p = 1; p <= doc.numPages; p++) {
-        const content = await (await doc.getPage(p)).getTextContent();
+    const pages = await loadPdfPages(buffer);
+    // Табличная выписка банка: берём только строки операций, шапку с ФИО и номерами отбрасываем.
+    const table = readBankTable(pages);
+    if (table.operations.length) {
+      rows = table.operations.map((op, i) => {
+        const [y, m, d] = op.date.split('-');
+        return {
+          ...row(
+            `row-${i + 1}`,
+            `${d}.${m}.${y} ${op.description} ${op.amount}`,
+            op.date,
+            op.description,
+            op.amount,
+            '',
+          ),
+          origin: 'bank-table' as const,
+        };
+      });
+    } else {
+      const lines: string[] = [];
+      for (const items of pages) {
         let line = '';
         let previousY: number | undefined;
-        for (const item of content.items) {
-          if (!('str' in item)) continue;
-          const y = Math.round(item.transform[5]);
-          if (previousY !== undefined && Math.abs(y - previousY) > 3 && line.trim()) {
+        for (const item of items) {
+          if (previousY !== undefined && Math.abs(item.y - previousY) > 3 && line.trim()) {
             lines.push(line.trim());
             line = '';
           }
           line += `${item.str} `;
-          previousY = y;
+          previousY = item.y;
           if (item.hasEOL && line.trim()) {
             lines.push(line.trim());
             line = '';
@@ -134,33 +147,28 @@ export async function extractStatement(
         }
         if (line.trim()) lines.push(line.trim());
       }
-    } catch (e) {
-      if (e instanceof InputError) throw e;
-      throw new InputError('PDF повреждён или защищён паролем. Используйте текстовый PDF или CSV.');
-    } finally {
-      await task.destroy();
-    }
-    if (!lines.some((line) => line.trim()))
-      throw new InputError(
-        'В PDF нет текстового слоя. Сканированные PDF и OCR пока не поддерживаются.',
-      );
-    rows = lines.map((raw, i) => {
-      const m =
-        /^(\d{4}-\d{2}-\d{2}|\d{2}\.\d{2}\.\d{4})\s+(.+?)\s+([+-][\d\s]+[.,]\d{2})\s*(?:₽|RUB)?$/.exec(
-          raw,
+      if (!lines.some((line) => line.trim()))
+        throw new InputError(
+          'В PDF нет текстового слоя. Сканированные PDF и OCR пока не поддерживаются.',
         );
-      return m && !/[+-]?\d+[.,]\d{2}/.test(m[2])
-        ? row(`row-${i + 1}`, raw, m[1], m[2], m[3], '')
-        : {
-            id: `row-${i + 1}`,
+      rows = lines.map((raw, i) => {
+        const m =
+          /^(\d{4}-\d{2}-\d{2}|\d{2}\.\d{2}\.\d{4})\s+(.+?)\s+([+-][\d\s]+[.,]\d{2})\s*(?:₽|RUB)?$/.exec(
             raw,
-            date: null,
-            description: null,
-            amountKopecks: null,
-            direction: null,
-            issue: 'Неоднозначная строка PDF: проверьте вручную или исключите заголовок',
-          };
-    });
+          );
+        return m && !/[+-]?\d+[.,]\d{2}/.test(m[2])
+          ? row(`row-${i + 1}`, raw, m[1], m[2], m[3], '')
+          : {
+              id: `row-${i + 1}`,
+              raw,
+              date: null,
+              description: null,
+              amountKopecks: null,
+              direction: null,
+              issue: 'Неоднозначная строка PDF: проверьте вручную или исключите заголовок',
+            };
+      });
+    }
   } else throw new InputError('Поддерживаются только CSV и текстовый PDF.');
   if (!rows.length) throw new InputError('В выписке нет операций.');
   if (filename.toLowerCase().endsWith('.csv')) {
